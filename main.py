@@ -30,18 +30,16 @@ def get_mask(frame, lower_color, upper_color):
     return mask
 
 
-def get_roi(contours, frame, tolerance):
-    if len(contours) != 0:
-        x, y, w, h = cv2.boundingRect(contours)
-
+def get_roi(x, y, w, h, frame, tolerance):
         # increase size for more tolerance
         height, width = frame.shape[:2]
-        tolerance_x = int((w / height) * tolerance)
-        tolerance_y = int((h / height) * tolerance)
-        x = x - tolerance_x
-        w = w + tolerance_x * 2
-        y = y - tolerance_y
-        h = h + tolerance_y * 2
+        if tolerance > 1:
+            tolerance_x = int((w / height) * tolerance)
+            tolerance_y = int((h / height) * tolerance)
+            x = x - tolerance_x
+            w = w + tolerance_x * 2
+            y = y - tolerance_y
+            h = h + tolerance_y * 2
 
         return frame[y:(y + h), x:(x + w)], {"x": x, "y": y, "w": w, "h": h}
 
@@ -71,18 +69,22 @@ def get_table(frame, blue):
     blue_mask = get_mask(frame, lower_blue, upper_blue)
     print_frame(blue_mask, "blue_mask")
 
-
-
     if blue:
         kernel = np.ones((20, 20), np.uint8)
         blue_mask_dilated = cv2.dilate(blue_mask, kernel)
         print_frame(blue_mask_dilated, "blue_mask_dilated")
-        roi, coordinates = get_roi(get_biggest_contour(blue_mask_dilated), frame.copy(), 25)
+        contours = get_biggest_contour(blue_mask_dilated)
+        if len(contours) != 0:
+            x, y, w, h = cv2.boundingRect(contours)
+        roi, coordinates = get_roi(x, y, w, h, frame.copy(), 25)
     else:
         kernel = np.ones((10, 10), np.uint8)
         green_mask_dilated = cv2.dilate(green_mask, kernel)
         print_frame(green_mask_dilated, "green_mask_dilated")
-        roi, coordinates = get_roi(get_biggest_contour(green_mask_dilated), frame.copy(), 25)
+        contours = get_biggest_contour(green_mask_dilated)
+        if len(contours) != 0:
+            x, y, w, h = cv2.boundingRect(contours)
+        roi, coordinates = get_roi(x, y, w, h, frame.copy(), 25)
 
     print_frame(roi, "roi")
 
@@ -122,7 +124,16 @@ def get_table(frame, blue):
     cv2.line(roi, left, top, (0, 255, 0), 6)
     cv2.line(roi, top, right, (0, 255, 0), 6)
     print_frame(roi, "table_lines")
+
+    left = (left[0] + coordinates["x"], left[1] + coordinates["y"])
+    top = (top[0] + coordinates["x"], top[1] + coordinates["y"])
+    right = (right[0] + coordinates["x"], right[1] + coordinates["y"])
+    bottom = (bottom[0] + coordinates["x"], bottom[1] + coordinates["y"])
     return left, top, right, bottom
+    pass
+
+
+def get_ball_position(first_frame, current_frame):
     pass
 
 
@@ -130,18 +141,31 @@ def main(file, video):
     if video:
         camera = cv2.VideoCapture(file)
 
-        #(grabbed, frame) = camera.read()
-        #print_frame(frame, "input_frame")
+        (grabbed, first_frame) = camera.read()
+        print_frame(first_frame, "input_first_frame")
+
+        tleft, ttop, tright, tbottom = get_table(first_frame, False)
+        x = tleft[0]
+        y = 0
+        w = tright[0]-tleft[0]
+        h = tbottom[1]
+        roi_first_frame, coordinates = get_roi(x, y, w, h, first_frame.copy(), 1)
+        print_frame(roi_first_frame, "roi_first_frame")
 
         while camera.isOpened():
-            (grabbed, frame) = camera.read()
-            print_frame(frame, "input_frame")
+            (grabbed, current_frame) = camera.read()
 
-            get_table(frame, False)
+            cv2.line(current_frame, tleft, tbottom, (0, 255, 0), 6)
+            cv2.line(current_frame, tbottom, tright, (0, 255, 0), 6)
+            cv2.line(current_frame, tleft, ttop, (0, 255, 0), 6)
+            cv2.line(current_frame, ttop, tright, (0, 255, 0), 6)
 
+            print_frame(current_frame, "input_current_frame")
 
+            roi_current_frame, coordinates = get_roi(x, y, w, h, current_frame.copy(), 1)
+            print_frame(roi_current_frame, "roi_current_frame")
 
-
+            get_ball_position(roi_current_frame, current_frame)
 
     else:
         frame = cv2.imread(file)
