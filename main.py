@@ -10,18 +10,24 @@ upper_blue = np.array([124, 228, 255], dtype="uint8")
 lower_green = np.array([40, 20, 120], dtype="uint8")
 upper_green = np.array([105, 100, 200], dtype="uint8")
 
-# White has RGB bound values
+# White has HSV bound values
 lower_white = np.array([00, 0, 200], dtype="uint8")
 upper_white = np.array([180, 50, 255], dtype="uint8")
 
 
-def print_frame(frame, name):
+# White for ball is more tolerant
+b_lower_white = np.array([00, 20, 200], dtype="uint8")
+b_upper_white = np.array([180, 80, 255], dtype="uint8")
+
+def print_frame(frame, name, show_image=False):
     height, width = frame.shape[:2]
     frame = cv2.resize(frame, (int(width / 2), int(height / 2)))
-    cv2.imshow(name, frame)
+
     cv2.imwrite(name + '.png', frame)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    if show_image:
+        cv2.imshow(name, frame)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 def get_mask(frame, lower_color, upper_color):
@@ -34,7 +40,7 @@ def get_roi(x, y, w, h, frame, tolerance):
         # increase size for more tolerance
         height, width = frame.shape[:2]
         if tolerance > 1:
-            tolerance_x = int((w / height) * tolerance)
+            tolerance_x = int((w / width) * tolerance)
             tolerance_y = int((h / height) * tolerance)
             x = x - tolerance_x
             w = w + tolerance_x * 2
@@ -133,8 +139,48 @@ def get_table(frame, blue):
     pass
 
 
-def get_ball_position(first_frame, current_frame):
+def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_position=None):
+
+    #add current frame for background subtraction
+    background_gmask = fgbg.apply(current_frame.copy())
+
+    #narrow background to the roi and dilate the result
+    roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], background_gmask.copy(), 1)
+    kernel = np.ones((5, 5), np.uint8)
+    d_background_gmask = cv2.dilate(roi_current_frame, kernel)
+
+    #substract back and foreground
+    roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], current_frame.copy(), 1)
+    fg = cv2.bitwise_and(roi_current_frame, roi_current_frame, mask=d_background_gmask)
+
+    #now filter out our white ball
+    white_mask = get_mask(fg, b_lower_white, b_upper_white)
+    kernel = np.ones((20, 20), np.uint8)
+    white_mask = cv2.dilate(white_mask, kernel)
+    contours = get_biggest_contour(white_mask)
+    if len(contours) != 0:
+        x1, y1, w1, h1 = cv2.boundingRect(contours)
+
+    #draw a border around tha ball
+    top_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1)
+    top_right = (roi_coordinates["x"] + x1 + w1, roi_coordinates["y"] + y1)
+    bottom_right = (roi_coordinates["x"] + x1 + w1, roi_coordinates["y"] + y1 + h1)
+    bottom_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1 + h1)
+    result = draw_border(top_left, top_right, bottom_right, bottom_left, current_frame.copy(), (255, 255, 0))
+
+    height, width = result.shape[:2]
+    cv2.resize(result, (int(width / 2), int(height / 2)))
+    cv2.imshow("run", result)
+    cv2.waitKey(1)
+
     pass
+
+def draw_border(top_left, top_right, bottom_right, bottom_left, frame, color):
+    cv2.line(frame, top_left, bottom_left, color, 6)
+    cv2.line(frame, bottom_left, bottom_right, color, 6)
+    cv2.line(frame, top_left, top_right, color, 6)
+    cv2.line(frame, top_right, bottom_right, color, 6)
+    return frame
 
 
 def main(file, video):
@@ -150,22 +196,21 @@ def main(file, video):
         w = tright[0]-tleft[0]
         h = tbottom[1]
         roi_first_frame, coordinates = get_roi(x, y, w, h, first_frame.copy(), 1)
-        print_frame(roi_first_frame, "roi_first_frame")
+        print_frame(roi_first_frame, "roi_first_frame", True)
+
+        last_frame = first_frame.copy()
+
+        fgbg = cv2.createBackgroundSubtractorMOG2(history=10, varThreshold=70, detectShadows=False)
+        fgbg.apply(last_frame)
 
         while camera.isOpened():
             (grabbed, current_frame) = camera.read()
 
-            cv2.line(current_frame, tleft, tbottom, (0, 255, 0), 6)
-            cv2.line(current_frame, tbottom, tright, (0, 255, 0), 6)
-            cv2.line(current_frame, tleft, ttop, (0, 255, 0), 6)
-            cv2.line(current_frame, ttop, tright, (0, 255, 0), 6)
+            current_frame = draw_border(tleft, ttop, tright, tbottom, current_frame.copy(), (0, 255, 0))
 
-            print_frame(current_frame, "input_current_frame")
+            get_ball_position(last_frame, current_frame, {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg)
 
-            roi_current_frame, coordinates = get_roi(x, y, w, h, current_frame.copy(), 1)
-            print_frame(roi_current_frame, "roi_current_frame")
-
-            get_ball_position(roi_current_frame, current_frame)
+            last_frame = current_frame.copy()
 
     else:
         frame = cv2.imread(file)
