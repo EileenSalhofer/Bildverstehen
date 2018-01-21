@@ -52,6 +52,8 @@ def get_roi(x, y, w, h, frame, tolerance):
 
 def get_biggest_contour(mask):
     (_, contours, _) = cv2.findContours(mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    if len(contours) == 0:
+        return contours
     c = max(contours, key=cv2.contourArea)
     return c
 
@@ -158,8 +160,10 @@ def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_pos
     kernel = np.ones((20, 20), np.uint8)
     white_mask = cv2.dilate(white_mask, kernel)
     contours = get_biggest_contour(white_mask)
-    if len(contours) != 0:
-        x1, y1, w1, h1 = cv2.boundingRect(contours)
+    if len(contours) == 0:
+        return
+
+    x1, y1, w1, h1 = cv2.boundingRect(contours)
 
     #draw a border around tha ball
     top_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1)
@@ -169,7 +173,7 @@ def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_pos
     result = draw_border(top_left, top_right, bottom_right, bottom_left, current_frame.copy(), (255, 255, 0))
 
     height, width = result.shape[:2]
-    cv2.resize(result, (int(width / 2), int(height / 2)))
+    result = cv2.resize(result, (int(width / 2), int(height / 2)))
     cv2.imshow("run", result)
     cv2.waitKey(1)
 
