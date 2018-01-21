@@ -209,6 +209,8 @@ def main(file, video):
 
         while camera.isOpened():
             (grabbed, current_frame) = camera.read()
+            if not grabbed:
+                break
 
             current_frame = draw_border(tleft, ttop, tright, tbottom, current_frame.copy(), (0, 255, 0))
 
