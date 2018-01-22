@@ -16,9 +16,12 @@ upper_white = np.array([180, 50, 255], dtype="uint8")
 
 
 # White for ball is more tolerant
-b_lower_white = np.array([00, 20, 200], dtype="uint8")
+b_lower_white = np.array([00, 10, 170], dtype="uint8")
 b_upper_white = np.array([180, 100, 255], dtype="uint8")
 
+border_left = 0
+border_right = 0
+border_center = 0
 
 class Ball:
 
@@ -216,15 +219,72 @@ def get_table(frame, blue):
     pass
 
 
-def get_ball_position(ball, current_frame, roi_coordinates, fgbg, last_position=None):
+def narrow_down_roi_for_ball(ball, tleft, tright):
+    global border_left
+    global border_right
+    if ball.lastPosition_center_x == 0 and ball.lastPosition_center_y == 0:
+        return {}
+        # ball goes left up
+    if ball.left and ball.up:
+        x = ball.currentPosition_x - 2 * ball.currentPosition_w + int(ball.currentPosition_w/2)
+        y = ball.currentPosition_y - 2 * ball.currentPosition_h
+        w = ball.currentPosition_w + 3 * ball.currentPosition_w
+        h = ball.currentPosition_h + 3 * ball.currentPosition_h
+
+    # ball goes left down
+    elif ball.left and not ball.up:
+        x = ball.currentPosition_x - 2 * ball.currentPosition_w + int(ball.currentPosition_w/2)
+        y = ball.currentPosition_y - int(ball.currentPosition_h/2)
+        w = ball.currentPosition_w + 3 * ball.currentPosition_w
+        h = ball.currentPosition_h + 2 * ball.currentPosition_h
+
+    # ball goes right up
+    elif not ball.left and ball.up:
+        x = ball.currentPosition_x - int(ball.currentPosition_w/2)
+        y = ball.currentPosition_y - 2 * ball.currentPosition_h
+        w = ball.currentPosition_w + 2 * ball.currentPosition_w
+        h = ball.currentPosition_h + 3 * ball.currentPosition_h
+
+    # ball goes right down
+    elif not ball.left and not ball.up:
+        x = ball.currentPosition_x - int(ball.currentPosition_w/2)
+        y = ball.currentPosition_y - int(ball.currentPosition_h/2)
+        w = ball.currentPosition_w + 2 * ball.currentPosition_w
+        h = ball.currentPosition_h + 2 * ball.currentPosition_h
+
+    if ball.currentPosition_center_x < border_center and border_left != tleft and x < border_left:
+        temp = border_left - x
+        x = x + temp
+    if ball.currentPosition_center_x > border_center and border_right != tright and x+w > border_right:
+        temp = (x+w) - border_right
+        x = x - temp
+
+
+    return {"x": x, "y": y, "w": w, "h": h}
+
+
+
+def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright):
+    global border_left
+    global border_right
+    global border_center
 
     #add current frame for background subtraction
     background_gmask = fgbg.apply(current_frame.copy())
 
-    #narrow background to the roi and dilate the result
+
+    test = False
+    # narrow background to the roi and dilate the result
+    coordinates = narrow_down_roi_for_ball(ball, tleft, tright)
+    if len(coordinates) != 0:
+        #we know the position and direction of the ball so we can update te roi
+        roi_coordinates = coordinates
+        test = True
+
+
     roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], background_gmask.copy(), 1)
-    kernel = np.ones((5, 5), np.uint8)
-    d_background_gmask = cv2.dilate(roi_current_frame, kernel)
+    roi_current_frame = cv2.erode(roi_current_frame, np.ones((3, 3), np.uint8))
+    d_background_gmask = cv2.dilate(roi_current_frame, np.ones((7, 7), np.uint8))
 
     #substract back and foreground
     roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], current_frame.copy(), 1)
@@ -232,13 +292,46 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, last_position=
 
     #now filter out our white ball
     white_mask = get_mask(fg, b_lower_white, b_upper_white)
-    kernel = np.ones((20, 20), np.uint8)
-    white_mask = cv2.dilate(white_mask, kernel)
-    contours = get_biggest_contour(white_mask)
+    white_mask = cv2.dilate(white_mask, np.ones((15, 15), np.uint8))
+
+    #cv2.imshow("temp", fg)
+    #cv2.imshow("w", white_mask)
+    #cv2.waitKey(0)
+
+
+    (_, contours, _) = cv2.findContours(white_mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     if len(contours) == 0:
         return []
+    max_contour = max(contours, key=cv2.contourArea)
+    x1, y1, w1, h1 = cv2.boundingRect(max_contour)
+    if test:
+        for c in contours:
+            tx, ty, tw, th = cv2.boundingRect(c)
+            right = roi_coordinates["x"] + tx + tw
+            left = roi_coordinates["x"] + tx
+            if tx == x1 and ty == y1 and tx + tw == x1+w1 and ty + th == y1 + h1:
+                continue
 
-    x1, y1, w1, h1 = cv2.boundingRect(contours)
+            #ball goes right but contour is left of it
+            if not ball.left and right < ball.currentPosition_center_x:
+                continue
+
+            #ball goes left but contour is right of it
+            if ball.left and left > ball.currentPosition_center_x:
+                continue
+
+            #ball goes left and there is something moving in front of it
+            if ball.left and ball.currentPosition_center_x < border_center and \
+                            right < ball.currentPosition_center_x and right > border_left:
+                border_left = roi_coordinates["x"] + tx+tw
+                border_right = tright
+
+
+            # ball goes right and there is something moving in front of it
+            if not ball.left and ball.currentPosition_center_x > border_center and\
+                            left > ball.currentPosition_center_x  and left < border_right:
+                border_right = roi_coordinates["x"] + tx
+                border_left = tleft
 
     #draw a border around tha ball
     top_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1)
@@ -247,12 +340,13 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, last_position=
     bottom_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1 + h1)
     result = draw_border(top_left, top_right, bottom_right, bottom_left, current_frame.copy(), (255, 255, 0))
 
-    """
-    height, width = result.shape[:2]
-    result = cv2.resize(result, (int(width / 2), int(height / 2)))
-    cv2.imshow("temp", fg)
-    cv2.waitKey(1)
-    """
+
+    #height, width = result.shape[:2]
+    #result = cv2.resize(result, (int(width / 2), int(height / 2)))
+    #cv2.imshow("temp", fg)
+    #cv2.imshow("w", white_mask)
+    #cv2.waitKey(0)
+
 
     ball.updated_position(roi_coordinates["x"] + x1, roi_coordinates["y"] + y1, w1, h1)
     return result
@@ -267,11 +361,14 @@ def draw_border(top_left, top_right, bottom_right, bottom_left, frame, color):
 
 
 def main(file, video):
+    global border_left
+    global border_right
+    global border_center
     if video:
         camera = cv2.VideoCapture(file)
 
         (grabbed, first_frame) = camera.read()
-        print_frame(first_frame, "input_first_frame")
+        print_frame( first_frame, "input_first_frame")
 
         tleft, ttop, tright, tbottom = get_table(first_frame, False)
         x = tleft[0]
@@ -279,7 +376,10 @@ def main(file, video):
         w = tright[0]-tleft[0]
         h = tbottom[1]
         roi_first_frame, coordinates = get_roi(x, y, w, h, first_frame.copy(), 1)
-        print_frame(roi_first_frame, "roi_first_frame", True)
+        #print_frame(roi_first_frame, "roi_first_frame", True)
+        border_left = tleft[0]
+        border_right = tright[0]
+        border_center = tleft[0] + int((tright[0]-tleft[0])/2)
 
         last_frame = first_frame.copy()
 
@@ -293,12 +393,13 @@ def main(file, video):
             if not grabbed:
                 break
 
-            result = get_ball_position(ball, current_frame.copy(), {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg)
-            if len(current_frame) == 0:
+            result = get_ball_position(ball, current_frame.copy(),
+                                       {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg, tleft[0], tright[0])
+            if len(result) == 0:
                 continue
 
             result = draw_border(tleft, ttop, tright, tbottom, result.copy(), (0, 255, 0))
-            if len(current_frame) == 0:
+            if len(result) == 0:
                 continue
 
             ball.draw_arrow(result)
