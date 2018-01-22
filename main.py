@@ -17,7 +17,82 @@ upper_white = np.array([180, 50, 255], dtype="uint8")
 
 # White for ball is more tolerant
 b_lower_white = np.array([00, 20, 200], dtype="uint8")
-b_upper_white = np.array([180, 80, 255], dtype="uint8")
+b_upper_white = np.array([180, 100, 255], dtype="uint8")
+
+
+class Ball:
+
+    def __init__(self):
+        self.currentPosition_x = 0
+        self.currentPosition_y = 0
+        self.currentPosition_w = 0
+        self.currentPosition_h = 0
+
+        self.lastPosition_center_x = 0
+        self.lastPosition_center_y = 0
+        self.currentPosition_center_x = 0
+        self.currentPosition_center_y = 0
+
+        #for now eight directional definition
+        #North:1; NE:2; E:3; SE:4; S:5; SW:6; W:7; NW:8
+        self.currentDirection = 0
+        self.left = False
+        self.up = False
+
+    def calculate_direction(self):
+        if self.lastPosition_center_x == 0 and self.lastPosition_center_y == 0:
+            return
+        if self.lastPosition_center_x < self.currentPosition_center_x:
+            self.left = False
+        else:
+            self.left = True
+        #don't forget x and y start in the top left corner of the image
+        if self.lastPosition_center_y > self.currentPosition_center_y:
+            self.up = True
+        else:
+            self.up = False
+        pass
+
+    def updated_position(self, x, y, w, h):
+        self.lastPosition_center_x = self.currentPosition_center_x
+        self.lastPosition_center_y = self.currentPosition_center_y
+        self.currentPosition_center_x = x + int(w / 2)
+        self.currentPosition_center_y = y + int(h / 2)
+        self.currentPosition_x = x
+        self.currentPosition_y = y
+        self.currentPosition_w = w
+        self.currentPosition_h = h
+        self.calculate_direction()
+        pass
+
+
+    def draw_arrow(self, frame):
+        point_top_left = (self.currentPosition_x, self.currentPosition_y)
+        point_top_right = (self.currentPosition_x + self.currentPosition_w, self.currentPosition_y)
+        point_bottom_right = (self.currentPosition_x + self.currentPosition_w, self.currentPosition_y + self.currentPosition_h)
+        point_bottom_left = (self.currentPosition_x, self.currentPosition_y + self.currentPosition_h)
+
+        #ball goes left up
+        if self.left and self.up:
+            cv2.arrowedLine(frame, point_bottom_right, point_top_left,  (0, 255, 0), 3)
+            return
+        # ball goes left down
+        elif self.left and not self.up:
+            cv2.arrowedLine(frame, point_top_right, point_bottom_left, (0, 255, 0), 3)
+            return
+        # ball goes right up
+        elif not self.left and self.up:
+            cv2.arrowedLine(frame, point_bottom_left, point_top_right, (0, 255, 0), 3)
+            return
+        # ball goes right down
+        elif not self.left and not self.up:
+            cv2.arrowedLine(frame, point_top_left, point_bottom_right, (0, 255, 0), 3)
+            return
+
+
+
+
+
 
 def print_frame(frame, name, show_image=False):
     height, width = frame.shape[:2]
@@ -141,7 +216,7 @@ def get_table(frame, blue):
     pass
 
 
-def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_position=None):
+def get_ball_position(ball, current_frame, roi_coordinates, fgbg, last_position=None):
 
     #add current frame for background subtraction
     background_gmask = fgbg.apply(current_frame.copy())
@@ -161,7 +236,7 @@ def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_pos
     white_mask = cv2.dilate(white_mask, kernel)
     contours = get_biggest_contour(white_mask)
     if len(contours) == 0:
-        return
+        return []
 
     x1, y1, w1, h1 = cv2.boundingRect(contours)
 
@@ -172,12 +247,16 @@ def get_ball_position(last_frame, current_frame, roi_coordinates, fgbg, last_pos
     bottom_left = (roi_coordinates["x"] + x1, roi_coordinates["y"] + y1 + h1)
     result = draw_border(top_left, top_right, bottom_right, bottom_left, current_frame.copy(), (255, 255, 0))
 
+    """
     height, width = result.shape[:2]
     result = cv2.resize(result, (int(width / 2), int(height / 2)))
-    cv2.imshow("run", result)
+    cv2.imshow("temp", fg)
     cv2.waitKey(1)
+    """
 
-    pass
+    ball.updated_position(roi_coordinates["x"] + x1, roi_coordinates["y"] + y1, w1, h1)
+    return result
+
 
 def draw_border(top_left, top_right, bottom_right, bottom_left, frame, color):
     cv2.line(frame, top_left, bottom_left, color, 6)
@@ -207,14 +286,27 @@ def main(file, video):
         fgbg = cv2.createBackgroundSubtractorMOG2(history=10, varThreshold=70, detectShadows=False)
         fgbg.apply(last_frame)
 
+        ball = Ball()
+
         while camera.isOpened():
             (grabbed, current_frame) = camera.read()
             if not grabbed:
                 break
 
-            current_frame = draw_border(tleft, ttop, tright, tbottom, current_frame.copy(), (0, 255, 0))
+            result = get_ball_position(ball, current_frame.copy(), {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg)
+            if len(current_frame) == 0:
+                continue
 
-            get_ball_position(last_frame, current_frame, {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg)
+            result = draw_border(tleft, ttop, tright, tbottom, result.copy(), (0, 255, 0))
+            if len(current_frame) == 0:
+                continue
+
+            ball.draw_arrow(result)
+
+            height, width = result.shape[:2]
+            result = cv2.resize(result, (int(width / 2), int(height / 2)))
+            cv2.imshow("run", result)
+            cv2.waitKey(1)
 
             last_frame = current_frame.copy()
 
