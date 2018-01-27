@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 
-import copy
 
 # Blues has HSV bound values
 lower_blue = np.array([40, 84, 100], dtype="uint8")
@@ -26,6 +25,7 @@ border_center = 0
 center_left_side = (0, 0)
 center_right_side = (0, 0)
 
+
 class Ball:
 
     def __init__(self):
@@ -41,17 +41,22 @@ class Ball:
 
         self.box = []
 
-        #for now eight directional definition
-        #North:1; NE:2; E:3; SE:4; S:5; SW:6; W:7; NW:8
-        self.currentDirection = 0
         self.left = False
         self.up = False
 
-        self.arrowhead = (0,0)
-        self.arrowtail = (0,0)
+        self.lastArrowHead = (0, 0)
+        self.lastArrowTail = (0, 0)
+        self.arrowhead = (0, 0)
+        self.arrowtail = (0, 0)
 
         self.oldguessedpath = np.array([])
         self.lastLeft = False
+        self.lastUp = False
+
+        self.leftRightChange = False
+        self.upDownChange = False
+
+        self.frameCounter = 0
 
     def calculate_direction(self):
         global border_left
@@ -60,21 +65,27 @@ class Ball:
             return
 
         if self.left and (border_left + int(self.currentPosition_w)/3) > self.currentPosition_x:
+            self.lastLeft = self.left
             self.left = False
             return
 
         if not self.left and (border_right - int(self.currentPosition_w)/3) < self.currentPosition_x:
+            self.lastLeft = self.left
             self.left = True
             return
 
         if self.lastPosition_center_x < self.currentPosition_center_x:
+            self.lastLeft = self.left
             self.left = False
         else:
+            self.lastLeft = self.left
             self.left = True
-        #don't forget x and y start in the top left corner of the image
+        # don't forget x and y start in the top left corner of the image
         if self.lastPosition_center_y > self.currentPosition_center_y:
+            self.lastUp = self.up
             self.up = True
         else:
+            self.lastUp = self.up
             self.up = False
         pass
 
@@ -84,7 +95,6 @@ class Ball:
         min_x = min([box[0][0], box[1][0], box[2][0], box[3][0]])
         max_y = max([box[0][1], box[1][1], box[2][1], box[3][1]])
         min_y = min([box[0][1], box[1][1], box[2][1], box[3][1]])
-
 
         self.lastPosition_center_x = self.currentPosition_center_x
         self.lastPosition_center_y = self.currentPosition_center_y
@@ -96,7 +106,6 @@ class Ball:
         self.currentPosition_h = (max_y-min_y)
         self.calculate_direction()
         pass
-
 
     def draw_arrow(self, frame):
         box = self.box
@@ -115,92 +124,149 @@ class Ball:
         right = right if right[0] > center_line_d[0] else center_line_d
 
         if self.left and left and right:
+            self.lastArrowHead = self.arrowhead
+            self.lastArrowTail = self.arrowtail
             self.arrowhead = left
             self.arrowtail = right
             cv2.arrowedLine(frame, right, left, (0, 255, 0), 3)
             return
         elif left and right:
+            self.lastArrowHead = self.arrowhead
+            self.lastArrowTail = self.arrowtail
             self.arrowhead = right
             self.arrowtail = left
             cv2.arrowedLine(frame, left, right, (0, 255, 0), 3)
             return
 
-
     def draw_parable(self, frame):
         global center_left_side
         global center_right_side
 
-        if self.lastLeft == self.left:
-            cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-            return self.oldguessedpath
+        if not (self.up == True and self.lastUp == False) and self.frameCounter == 0 and self.lastLeft == self.left:
+            self.upDownChange = False
+            self.leftRightChange = False
+            if self.lastLeft == self.left:
+                cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                return self.oldguessedpath
 
-        self.lastLeft = self.left
+            if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= center_right_side[0]:
+                return np.array([])
 
-
-        if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= center_right_side[0]:
+        elif self.frameCounter == 0 or (self.up == True and self.lastUp == False) or not (self.lastLeft == self.left):
+            self.frameCounter += 1
+            self.upDownChange = False
+            self.leftRightChange = False
+            if not (self.lastLeft == self.left):
+                self.leftRightChange = True
+            else:
+                self.upDownChange = True
             return np.array([])
+        elif self.upDownChange == True and self.up == True and self.lastUp == True:
+            self.upDownChange = False
+            self.leftRightChange = False
+            self.frameCounter = 0
 
-        # ball goes left up
-        if self.left and self.up:
-            p1 = center_left_side
-            #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
-            p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
-                  self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
-            p3 = self.arrowhead
+            # ball goes left up
+            if self.left and self.up:
+                p1 = (self.arrowhead[0] - int(5*abs(self.arrowtail[0] - self.arrowhead[0])),
+                      self.arrowhead[1] - int(2*abs(self.arrowtail[1] - self.arrowhead[1])))
+                # p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+                p2 = (self.arrowhead[0] - int(2*abs(self.arrowtail[0] - self.arrowhead[0])),
+                      self.arrowhead[1] - int(abs(self.arrowtail[1] - self.arrowhead[1])))
+                p3 = self.arrowhead
 
-            pts = np.array(parable_get_points_between(p1, p2, p3))
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
 
-            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-            self.oldguessedpath = pts
+                # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
+                # ball goes right up
 
-        # ball goes left down
-        elif self.left and not self.up:
-            p1 = center_left_side
-            #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])))
-            p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
-                  self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
-            p3 = self.arrowhead
+            elif not self.left and self.up:
+                p1 = self.arrowhead
+                # p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+                p2 = (self.arrowhead[0] + int(2*abs(self.arrowhead[0] - self.arrowtail[0])),
+                      self.arrowhead[1] - int(abs(self.arrowtail[1] - self.arrowhead[1])))
+                p3 = (self.arrowhead[0] + int(5*abs(self.arrowhead[0] - self.arrowtail[0])),
+                      self.arrowhead[1] - int(2*abs(self.arrowtail[1] - self.arrowhead[1])))
 
-            pts = np.array(parable_get_points_between(p1, p2, p3))
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
 
-            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-            self.oldguessedpath = pts
+                # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
+            return np.array([])
+        elif self.leftRightChange == True and self.lastLeft == self.left:
+            self.frameCounter = 0
+            self.upDownChange = False
+            self.leftRightChange = False
+
+            # ball goes left up
+            if self.left and self.up:
+                p1 = center_left_side
+                #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+                p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
+                      self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+                p3 = self.arrowhead
+
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+
+                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
+
+            # ball goes left down
+            elif self.left and not self.up:
+                p1 = center_left_side
+                #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])))
+                p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
+                      self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+                p3 = self.arrowhead
+
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+
+                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
 
 
-        # ball goes right up
-        elif not self.left and self.up:
-            p1 = self.arrowhead
-            #p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
-            p2 = (self.arrowhead[0]  + int(abs(self.arrowhead[0] - self.arrowtail[0])),
-                  self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
-            p3 = center_right_side
+            # ball goes right up
+            elif not self.left and self.up:
+                p1 = self.arrowhead
+                #p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+                p2 = (self.arrowhead[0]  + int(abs(self.arrowhead[0] - self.arrowtail[0])),
+                      self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+                p3 = center_right_side
 
-            pts = np.array(parable_get_points_between(p1, p2, p3))
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
 
-            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-            self.oldguessedpath = pts
+                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
 
-        # ball goes right down
-        elif not self.left and not self.up:
-            p1 = self.arrowhead
-            p2 = (self.arrowhead[0] + int(abs(self.arrowhead[0] - self.arrowtail[0])),
-                  self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
-            #p2 = (self.arrowhead[0] + int(3.2*abs(self.arrowhead[0]-self.arrowtail[0])), self.arrowhead[1] + int(1.5*abs(self.arrowtail[1]-self.arrowhead[1])))
-            p3 = center_right_side
+            # ball goes right down
+            elif not self.left and not self.up:
+                p1 = self.arrowhead
+                p2 = (self.arrowhead[0] + int(abs(self.arrowhead[0] - self.arrowtail[0])),
+                      self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+                #p2 = (self.arrowhead[0] + int(3.2*abs(self.arrowhead[0]-self.arrowtail[0])), self.arrowhead[1] + int(1.5*abs(self.arrowtail[1]-self.arrowhead[1])))
+                p3 = center_right_side
 
-            pts = np.array(parable_get_points_between(p1, p2, p3))
-            pts = pts.reshape((-1, 1, 2))
-            cv2.polylines(frame, [pts], False, (0, 255 , 255), 6)
+                pts = np.array(parable_get_points_between(p1, p2, p3))
+                pts = pts.reshape((-1, 1, 2))
+                cv2.polylines(frame, [pts], False, (0, 255 , 255), 6)
 
-            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-            self.oldguessedpath = pts
-
+                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+                self.oldguessedpath = pts
+        else:
+            self.frameCounter = 1
+            #self.upDownChange = False
+            #self.leftRightChange = False
         pass
 
 
@@ -542,7 +608,7 @@ def main(file, video, blue_table, pos_straight):
         border_left = tleft[0]
         border_right = tright[0]
         border_center = tleft[0] + int((tright[0]-tleft[0])/2)
-        center_left_side = (tleft[0] + int((border_center-tleft[0])/2), tleft[1]+ int((tbottom[1]-tleft[1])/2))
+        center_left_side = (tleft[0] + int((border_center-tleft[0])/2), tleft[1] + int((tbottom[1]-tleft[1])/2))
         center_right_side = (border_center + int((tright[0] - border_center) / 2), ttop[1] + int((tright[1] - ttop[1])/2))
 
         last_frame = first_frame.copy()
