@@ -23,6 +23,8 @@ b_upper_white = np.array([180, 100, 255], dtype="uint8")
 border_left = 0
 border_right = 0
 border_center = 0
+center_left_side = (0, 0)
+center_right_side = (0, 0)
 
 class Ball:
 
@@ -45,17 +47,23 @@ class Ball:
         self.left = False
         self.up = False
 
+        self.arrowhead = (0,0)
+        self.arrowtail = (0,0)
+
+        self.oldguessedpath = np.array([])
+        self.lastLeft = False
+
     def calculate_direction(self):
         global border_left
         global border_right
         if self.lastPosition_center_x == 0 and self.lastPosition_center_y == 0:
             return
 
-        if self.left and (border_left + int(self.currentPosition_w)/2) > self.currentPosition_x:
+        if self.left and (border_left + int(self.currentPosition_w)/3) > self.currentPosition_x:
             self.left = False
             return
 
-        if not self.left and (border_right - int(self.currentPosition_w)/2) < self.currentPosition_x:
+        if not self.left and (border_right - int(self.currentPosition_w)/3) < self.currentPosition_x:
             self.left = True
             return
 
@@ -106,12 +114,128 @@ class Ball:
         right = right if right[0] > center_line_c[0] else center_line_c
         right = right if right[0] > center_line_d[0] else center_line_d
 
-        if self.left:
+        if self.left and left and right:
+            self.arrowhead = left
+            self.arrowtail = right
             cv2.arrowedLine(frame, right, left, (0, 255, 0), 3)
             return
-        else:
+        elif left and right:
+            self.arrowhead = right
+            self.arrowtail = left
             cv2.arrowedLine(frame, left, right, (0, 255, 0), 3)
             return
+
+
+    def draw_parable(self, frame):
+        global center_left_side
+        global center_right_side
+
+        if self.lastLeft == self.left:
+            cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+            return self.oldguessedpath
+
+        self.lastLeft = self.left
+
+
+        if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= center_right_side[0]:
+            return np.array([])
+
+        # ball goes left up
+        if self.left and self.up:
+            p1 = center_left_side
+            #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+            p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
+                  self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+            p3 = self.arrowhead
+
+            pts = np.array(parable_get_points_between(p1, p2, p3))
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+
+            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+            self.oldguessedpath = pts
+
+        # ball goes left down
+        elif self.left and not self.up:
+            p1 = center_left_side
+            #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])))
+            p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
+                  self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+            p3 = self.arrowhead
+
+            pts = np.array(parable_get_points_between(p1, p2, p3))
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+
+            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+            self.oldguessedpath = pts
+
+
+        # ball goes right up
+        elif not self.left and self.up:
+            p1 = self.arrowhead
+            #p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
+            p2 = (self.arrowhead[0]  + int(abs(self.arrowhead[0] - self.arrowtail[0])),
+                  self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+            p3 = center_right_side
+
+            pts = np.array(parable_get_points_between(p1, p2, p3))
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+
+            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+            self.oldguessedpath = pts
+
+        # ball goes right down
+        elif not self.left and not self.up:
+            p1 = self.arrowhead
+            p2 = (self.arrowhead[0] + int(abs(self.arrowhead[0] - self.arrowtail[0])),
+                  self.arrowhead[1] + int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
+            #p2 = (self.arrowhead[0] + int(3.2*abs(self.arrowhead[0]-self.arrowtail[0])), self.arrowhead[1] + int(1.5*abs(self.arrowtail[1]-self.arrowhead[1])))
+            p3 = center_right_side
+
+            pts = np.array(parable_get_points_between(p1, p2, p3))
+            pts = pts.reshape((-1, 1, 2))
+            cv2.polylines(frame, [pts], False, (0, 255 , 255), 6)
+
+            #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
+            self.oldguessedpath = pts
+
+        pass
+
+
+def parable_get_points_between(ptr1, ptr2, ptr3):
+    A1 = -(ptr1[0]**2)+(ptr2[0]**2)
+    B1 = -(ptr1[0]) + (ptr2[0])
+    D1 = -(ptr1[1]) + (ptr2[1])
+
+    A2 = -(ptr2[0] ** 2) + (ptr3[0] ** 2)
+    B2 = -(ptr2[0]) + (ptr3[0])
+    D2 = -(ptr2[1]) + (ptr3[1])
+
+    Bm = -(B2/B1)
+
+    A3 = Bm * A1 + A2
+    D3 = Bm * D1 + D2
+
+    a = D3/A3
+    b = (D1 - (A1 * a)) / B1
+    c = ptr1[1] - (a * (ptr1[0]**2)) - (b * ptr1[0])
+
+    points = []
+    points.append(ptr1)
+
+    ptr2_in_array = False
+    # Calculate points values
+    for x in range(abs(ptr1[0]-ptr3[0])):
+        x = x+ptr1[0]
+        if x > ptr2[0] and not ptr2_in_array:
+            points.append(ptr2)
+            ptr2_in_array = True
+            continue
+        y = abs(int((a * (x ** 2)) + (b * x) + c))
+        points.append([x, y])
+    return points
 
 
 def print_frame(frame, name, show_image=False):
@@ -397,8 +521,13 @@ def main(file, video, blue_table, pos_straight):
     global border_left
     global border_right
     global border_center
+    global center_left_side
+    global center_right_side
     if video:
         camera = cv2.VideoCapture(file)
+
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        out = cv2.VideoWriter('output.avi',fourcc, 20.0, (1920,1080))
 
         (grabbed, first_frame) = camera.read()
         print_frame( first_frame, "input_first_frame")
@@ -413,6 +542,8 @@ def main(file, video, blue_table, pos_straight):
         border_left = tleft[0]
         border_right = tright[0]
         border_center = tleft[0] + int((tright[0]-tleft[0])/2)
+        center_left_side = (tleft[0] + int((border_center-tleft[0])/2), tleft[1]+ int((tbottom[1]-tleft[1])/2))
+        center_right_side = (border_center + int((tright[0] - border_center) / 2), ttop[1] + int((tright[1] - ttop[1])/2))
 
         last_frame = first_frame.copy()
 
@@ -420,8 +551,8 @@ def main(file, video, blue_table, pos_straight):
         fgbg.apply(last_frame)
 
         result = draw_border(tleft, ttop, tright, tbottom, last_frame.copy(), (0, 255, 0))
-        cv2.imshow("run", result)
-        cv2.waitKey(0)
+        #cv2.imshow("run", result)
+        #cv2.waitKey(0)
 
         ball = Ball()
 
@@ -440,7 +571,9 @@ def main(file, video, blue_table, pos_straight):
                 continue
 
             ball.draw_arrow(result)
+            ball.draw_parable(result)
 
+            out.write(result)
             height, width = result.shape[:2]
             result = cv2.resize(result, (int(width / 2), int(height / 2)))
             cv2.imshow("run", result)
