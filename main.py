@@ -7,6 +7,7 @@ from helper import get_mask
 from helper import get_biggest_contour
 from helper import get_roi
 from helper import corners
+from helper import draw_border
 
 
 
@@ -25,7 +26,7 @@ def narrow_down_roi_for_ball(ball, tleft, tright):
                             ball.lastPosition_center_x == ball.currentPosition_center_x \
                     and ball.lastPosition_center_y == ball.currentPosition_center_y:
         return {}
-        # ball goes left up
+    # ball goes left up
     if ball.left and ball.up:
         x = ball.currentPosition_x - 2 * ball.currentPosition_w + int(ball.currentPosition_w/2)
         y = ball.currentPosition_y - 2 * ball.currentPosition_h
@@ -59,7 +60,6 @@ def narrow_down_roi_for_ball(ball, tleft, tright):
     if ball.currentPosition_center_x > border_center and border_right != tright and x+w > border_right:
         temp = (x+w) - border_right
         x = x - temp
-
 
     return {"x": x, "y": y, "w": w, "h": h}
 
@@ -135,7 +135,7 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
 
             #ball goes left and there is something moving in front of it
             if ball.left and ball.currentPosition_center_x < border_center and \
-                            right < ball.currentPosition_center_x                 :
+                            right < ball.currentPosition_center_x and right > border_left:
                 ball.table.  border_left = roi_coordinates["x"] + tx+tw
                 ball.table.border_right = tright
 
@@ -152,12 +152,6 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     return result
 
 
-def draw_border(top_left, top_right, bottom_right, bottom_left, frame, color):
-    cv2.line(frame, top_left, bottom_left, color, 6)
-    cv2.line(frame, bottom_left, bottom_right, color, 6)
-    cv2.line(frame, top_left, top_right, color, 6)
-    cv2.line(frame, top_right, bottom_right, color, 6)
-    return frame
 
 
 def main(file, video, blue_table, pos_straight):

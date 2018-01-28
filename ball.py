@@ -27,7 +27,8 @@ class Ball:
         self.arrowhead = (0, 0)
         self.arrowtail = (0, 0)
 
-        self.oldguessedpath = np.array([])
+        self.oldup = np.array([])
+        self.oldleftright = np.array([])
         self.lastLeft = False
         self.lastUp = False
 
@@ -137,11 +138,12 @@ class Ball:
             self.upDownChange = False
             self.leftRightChange = False
             if self.lastLeft == self.left:
-                cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-                return self.oldguessedpath
+                cv2.polylines(frame, [self.oldup], False, (255, 0, 0), 6)
+                cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
+                return
 
-            if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= center_right_side[0]:
-                return np.array([])
+            if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= self.table.center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= self.table.center_right_side[0]:
+                return
 
         elif self.frameCounter == 0 or (self.up == True and self.lastUp == False) or not (self.lastLeft == self.left):
             self.frameCounter += 1
@@ -151,7 +153,9 @@ class Ball:
                 self.leftRightChange = True
             else:
                 self.upDownChange = True
-            return np.array([])
+            cv2.polylines(frame, [self.oldup], False, (255, 0, 0), 6)
+            cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
+            return
         elif self.upDownChange == True and self.up == True and self.lastUp == True:
             self.upDownChange = False
             self.leftRightChange = False
@@ -174,11 +178,11 @@ class Ball:
 
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
 
                 # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-                self.oldguessedpath = pts
+                self.oldup = pts
                 # ball goes right up
-
             elif not self.left and self.up:
                 p1 = self.arrowhead
                 # p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
@@ -193,10 +197,11 @@ class Ball:
 
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
 
                 # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-                self.oldguessedpath = pts
-            return np.array([])
+                self.oldup = pts
+            return
         elif self.leftRightChange == True and self.lastLeft == self.left:
             self.frameCounter = 0
             self.upDownChange = False
@@ -213,9 +218,10 @@ class Ball:
                 pts = np.array(parable_get_points_between(p1, p2, p3))
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                cv2.polylines(frame, [self.oldup], False, (255, 0, 0), 6)
 
                 #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-                self.oldguessedpath = pts
+                self.oldleftright = pts
 
 
             # ball goes right up
@@ -229,9 +235,10 @@ class Ball:
                 pts = np.array(parable_get_points_between(p1, p2, p3))
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
+                cv2.polylines(frame, [self.oldup], False, (255, 0, 0 ), 6)
 
                 #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
-                self.oldguessedpath = pts
+                self.oldleftright = pts
 
         else:
             self.frameCounter = 1

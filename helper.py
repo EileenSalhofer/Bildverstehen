@@ -82,5 +82,11 @@ def corners(frame):
     gray = np.float32(gray)
     dst = cv2.cornerHarris(gray, 2, 3, 0.04)
 
-    # Threshold for an optimal value, it may vary depending on the image.
     return dst
+
+def draw_border(top_left, top_right, bottom_right, bottom_left, frame, color):
+    cv2.line(frame, top_left, bottom_left, color, 6)
+    cv2.line(frame, bottom_left, bottom_right, color, 6)
+    cv2.line(frame, top_left, top_right, color, 6)
+    cv2.line(frame, top_right, bottom_right, color, 6)
+    return frame
