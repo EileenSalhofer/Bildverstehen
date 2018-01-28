@@ -39,6 +39,7 @@ class Ball:
         self.currentPosition_center_x = 0
         self.currentPosition_center_y = 0
 
+        self.lastBox = []
         self.box = []
 
         self.left = False
@@ -138,9 +139,22 @@ class Ball:
             cv2.arrowedLine(frame, left, right, (0, 255, 0), 3)
             return
 
+    def position_change(self):
+        if self.box[0][0] == self.lastBox[0][0] and self.box[0][1] == self.lastBox[0][1] and \
+            self.box[1][0] == self.lastBox[1][0] and self.box[1][1] == self.lastBox[1][1] and \
+            self.box[2][0] == self.lastBox[2][0] and self.box[2][1] == self.lastBox[2][1] and \
+            self.box[3][0] == self.lastBox[3][0] and self.box[3][1] == self.lastBox[3][1]:
+            self.box = []
+            self.lastBox = []
+            return False
+
+        return True
+
     def draw_parable(self, frame):
         global center_left_side
         global center_right_side
+        global border_left
+        global border_right
 
         if not (self.up == True and self.lastUp == False) and self.frameCounter == 0 and self.lastLeft == self.left:
             self.upDownChange = False
@@ -175,7 +189,12 @@ class Ball:
                       self.arrowhead[1] - int(abs(self.arrowtail[1] - self.arrowhead[1])))
                 p3 = self.arrowhead
 
+
+
                 pts = np.array(parable_get_points_between(p1, p2, p3))
+
+                pts[pts[0:,0] < border_left, 0] = border_left + (border_left-pts[pts[0:,0] < border_left, 0])
+
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
 
@@ -192,6 +211,9 @@ class Ball:
                       self.arrowhead[1] - int(2*abs(self.arrowtail[1] - self.arrowhead[1])))
 
                 pts = np.array(parable_get_points_between(p1, p2, p3))
+
+                pts[pts[0:,0] > border_right, 0] = border_right - (pts[pts[0:,0] > border_right, 0]-border_right)
+
                 pts = pts.reshape((-1, 1, 2))
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
 
@@ -505,11 +527,16 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     test = False
     # narrow background to the roi and dilate the result
     coordinates = narrow_down_roi_for_ball(ball, tleft, tright)
+    temp = [1]
     if len(coordinates) != 0 and coordinates["x"] + coordinates["w"] < tright and coordinates["x"] > tleft:
         #we know the position and direction of the ball so we can update te roi
         roi_coordinates = coordinates
+        temp = [roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"]]
         test = True
 
+    if len(ball.box) != 0 and len(ball.lastBox) != 0 and not ball.position_change() or min(temp) < 0:
+        ball.updated_position(ball.box)
+        return []
 
     roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], background_gmask.copy(), 1)
     roi_current_frame = cv2.erode(roi_current_frame, np.ones((3, 3), np.uint8))
@@ -531,7 +558,7 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
 
     (_, contours, _) = cv2.findContours(white_mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     if len(contours) == 0:
-        ball.updated_position(ball.lastPosition_center_x, ball.currentPosition_y, ball.currentPosition_w, ball.currentPosition_h)
+        ball.updated_position(ball.box)
         return []
     max_contour = max(contours, key=cv2.contourArea)
 
@@ -655,7 +682,7 @@ def main(file, video, blue_table, pos_straight):
 
 
 if __name__ == "__main__":
-    # main("ggg.mp4", True, False, True)
+    #  main("ggg.mp4", True, False, True)
     main("gtt4.mp4", True, False, False)
     pass
 
