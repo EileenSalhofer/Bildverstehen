@@ -1,3 +1,0 @@
-\beamer@sectionintoc {1}{Goal and Problems Recap}{2}{0}{1}
-\beamer@sectionintoc {2}{Implemented Solution}{3}{0}{2}
-\beamer@sectionintoc {3}{(*\_*)}{9}{0}{3}
