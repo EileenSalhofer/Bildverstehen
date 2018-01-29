@@ -59,7 +59,7 @@ def main(file, blue_table, table_straight, print_output, create_video, do_predic
         if not grabbed:
             break
 
-        result = get_ball_position(ball, current_frame.copy(),
+        result = ball.get_ball_position(ball, current_frame.copy(),
                                    {"x": tbottom[0], "y": 0, "w": ttop[0] - tbottom[0], "h": tbottom[1]}, fgbg, tleft[0], tright[0])
         if len(result) == 0:
             result = current_frame.copy()
