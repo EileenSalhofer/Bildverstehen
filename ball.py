@@ -40,6 +40,15 @@ class Ball:
         self.table = None
 
     def calculate_direction(self):
+        """This Function sets the Flags for if the ball is going left or up according the last directions.
+
+        Args:
+            self: This class.
+
+        Returns:
+            None.
+
+        """
         border_left = self.table.border_left
         border_right = self.table.border_right
         if self.lastPosition_center_x == 0 and self.lastPosition_center_y == 0:
@@ -71,7 +80,19 @@ class Ball:
         pass
 
     def updated_position(self, box):
+        """This Function updates current x and y position of the ball. Calls class function calculate_direction.
+
+        Args:
+            self: This class.
+            box: A box around the current position of the ball.
+
+        Returns:
+            None.
+
+        """
         self.box = box
+        if len(self.box) == 0:
+            return
         max_x = max([box[0][0], box[1][0], box[2][0], box[3][0]])
         min_x = min([box[0][0], box[1][0], box[2][0], box[3][0]])
         max_y = max([box[0][1], box[1][1], box[2][1], box[3][1]])
@@ -89,12 +110,35 @@ class Ball:
         pass
 
     def draw_arrow(self, frame):
-        box = self.box
+        """This Function draws an arrow according to the current direction of the ball along the ball.
 
-        center_line_a =(  (box[1][0] + int((box[0][0] - box[1][0])/2)) if box[0][0] > box[1][0] else (box[0][0] + int((box[1][0] - box[0][0])/2)), (box[1][1] + int((box[0][1] - box[1][1])/2)) if box[0][1] > box[1][1] else (box[0][1] + int((box[1][1] - box[0][1])/2)))
-        center_line_b =( (box[2][0] + int((box[1][0] - box[2][0])/2)) if box[1][0] > box[2][0] else (box[1][0] + int((box[2][0] - box[1][0])/2)), (box[2][1] + int((box[1][1] - box[2][1])/2)) if box[1][1] > box[2][1] else (box[1][1] + int((box[2][1] - box[1][1])/2)))
-        center_line_c =( (box[3][0] + int((box[2][0] - box[3][0])/2)) if box[2][0] > box[3][0] else (box[2][0] + int((box[3][0] - box[2][0])/2)), (box[3][1] + int((box[2][1] - box[3][1])/2)) if box[2][1] > box[3][1] else (box[2][1] + int((box[3][1] - box[2][1])/2)))
-        center_line_d =( (box[0][0] + int((box[3][0] - box[0][0])/2)) if box[3][0] > box[0][0] else (box[3][0] + int((box[0][0] - box[3][0])/2)), (box[0][1] + int((box[3][1] - box[0][1])/2)) if box[3][1] > box[0][1] else (box[3][1] + int((box[0][1] - box[3][1])/2)))
+        Args:
+            self: This class.
+            frame: Image or Frame to draw the arrow in.
+
+        Returns:
+            None.
+
+        """
+        box = self.box
+        if len(box) == 0:
+            return
+        center_line_a =(  (box[1][0] + int((box[0][0] - box[1][0])/2)) if box[0][0] > box[1][0] else
+                          (box[0][0] + int((box[1][0] - box[0][0])/2)),
+                          (box[1][1] + int((box[0][1] - box[1][1])/2)) if box[0][1] > box[1][1] else
+                          (box[0][1] + int((box[1][1] - box[0][1])/2)))
+        center_line_b =( (box[2][0] + int((box[1][0] - box[2][0])/2)) if box[1][0] > box[2][0] else
+                         (box[1][0] + int((box[2][0] - box[1][0])/2)),
+                         (box[2][1] + int((box[1][1] - box[2][1])/2)) if box[1][1] > box[2][1] else
+                         (box[1][1] + int((box[2][1] - box[1][1])/2)))
+        center_line_c =( (box[3][0] + int((box[2][0] - box[3][0])/2)) if box[2][0] > box[3][0] else
+                         (box[2][0] + int((box[3][0] - box[2][0])/2)),
+                         (box[3][1] + int((box[2][1] - box[3][1])/2)) if box[2][1] > box[3][1] else
+                         (box[2][1] + int((box[3][1] - box[2][1])/2)))
+        center_line_d =( (box[0][0] + int((box[3][0] - box[0][0])/2)) if box[3][0] > box[0][0] else
+                         (box[3][0] + int((box[0][0] - box[3][0])/2)),
+                         (box[0][1] + int((box[3][1] - box[0][1])/2)) if box[3][1] > box[0][1] else
+                         (box[3][1] + int((box[0][1] - box[3][1])/2)))
 
         left = center_line_a if center_line_a[0] < center_line_b[0] else center_line_b
         left = left if left[0] < center_line_c[0] else center_line_c
@@ -120,6 +164,16 @@ class Ball:
             return
 
     def position_change(self):
+        """This Function is to check if the ball moved since current and the last frame.
+            If not this could indicate an error.
+
+        Args:
+            self: This class.
+
+        Returns:
+            Returns True if the postion of the ball changed. False if the ball stayed in the same position.
+
+        """
         if self.box[0][0] == self.lastBox[0][0] and self.box[0][1] == self.lastBox[0][1] and \
             self.box[1][0] == self.lastBox[1][0] and self.box[1][1] == self.lastBox[1][1] and \
             self.box[2][0] == self.lastBox[2][0] and self.box[2][1] == self.lastBox[2][1] and \
@@ -131,9 +185,20 @@ class Ball:
         return True
 
     def draw_parable(self, frame):
+        """This Function draws a parable into the current image.
+            Condition is that the ball moved in the last two frames in the same direction and
+            that there was a direction change in the last two frames. Calls parable_get_points_between from help.py
+
+        Args:
+            self: This class.
+            frame: Image or Frame to draw the parable in.
+
+        Returns:
+            None.
+
+        """
         border_left = self.table.border_left
         border_right = self.table.border_right
-        border_center = self.table.border_center
         if not (self.up == True and self.lastUp == False) and self.frameCounter == 0 and self.lastLeft == self.left:
             self.upDownChange = False
             self.leftRightChange = False
@@ -142,7 +207,8 @@ class Ball:
                 cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
                 return
 
-            if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= self.table.center_left_side[0] or not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= self.table.center_right_side[0]:
+            if self.left and (self.arrowhead[0]-2*abs(self.arrowtail[0] - self.arrowhead[0])) <= self.table.center_left_side[0] or\
+                            not self.left and (self.arrowhead[0]+2*abs(self.arrowhead[0] - self.arrowtail[0])) >= self.table.center_right_side[0]:
                 return
 
         elif self.frameCounter == 0 or (self.up == True and self.lastUp == False) or not (self.lastLeft == self.left):
@@ -165,7 +231,6 @@ class Ball:
             if self.left and self.up:
                 p1 = (self.arrowhead[0] - int(5*abs(self.arrowtail[0] - self.arrowhead[0])),
                       self.arrowhead[1] - int(2*abs(self.arrowtail[1] - self.arrowhead[1])))
-                # p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
                 p2 = (self.arrowhead[0] - int(2*abs(self.arrowtail[0] - self.arrowhead[0])),
                       self.arrowhead[1] - int(abs(self.arrowtail[1] - self.arrowhead[1])))
                 p3 = self.arrowhead
@@ -180,12 +245,10 @@ class Ball:
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
                 cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
 
-                # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
                 self.oldup = pts
-                # ball goes right up
+            # ball goes right up
             elif not self.left and self.up:
                 p1 = self.arrowhead
-                # p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
                 p2 = (self.arrowhead[0] + int(2*abs(self.arrowhead[0] - self.arrowtail[0])),
                       self.arrowhead[1] - int(abs(self.arrowtail[1] - self.arrowhead[1])))
                 p3 = (self.arrowhead[0] + int(5*abs(self.arrowhead[0] - self.arrowtail[0])),
@@ -199,7 +262,6 @@ class Ball:
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
                 cv2.polylines(frame, [self.oldleftright], False, (0, 0, 255), 6)
 
-                # cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
                 self.oldup = pts
             return
         elif self.leftRightChange == True and self.lastLeft == self.left:
@@ -210,7 +272,6 @@ class Ball:
             # ball goes left up
             if self.left and self.up:
                 p1 = self.table.center_left_side
-                #p2 = (center_left_side[0] + int(abs(self.arrowhead[0]-center_left_side[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
                 p2 = (self.arrowhead[0] - int(abs(self.arrowtail[0] - self.arrowhead[0])),
                       self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
                 p3 = self.arrowhead
@@ -220,14 +281,12 @@ class Ball:
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
                 cv2.polylines(frame, [self.oldup], False, (255, 0, 0), 6)
 
-                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
                 self.oldleftright = pts
 
 
             # ball goes right up
             elif not self.left and self.up:
                 p1 = self.arrowhead
-                #p2 = (center_right_side[0] - int(abs(center_right_side[0]-self.arrowhead[0])/2), self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])))
                 p2 = (self.arrowhead[0]  + int(abs(self.arrowhead[0] - self.arrowtail[0])),
                       self.arrowhead[1] - int(abs(self.arrowtail[1]-self.arrowhead[1])/2))
                 p3 = self.table.center_right_side
@@ -237,12 +296,9 @@ class Ball:
                 cv2.polylines(frame, [pts], False, (0, 255, 255), 6)
                 cv2.polylines(frame, [self.oldup], False, (255, 0, 0 ), 6)
 
-                #cv2.polylines(frame, [self.oldguessedpath], False, (0, 0, 255), 6)
                 self.oldleftright = pts
 
         else:
             self.frameCounter = 1
-            #self.upDownChange = False
-            #self.leftRightChange = False
         pass
 

@@ -1,7 +1,9 @@
 import numpy as np
 import cv2
+import argparse
 import ball as b
 import table as t
+import os.path
 from helper import print_frame
 from helper import get_mask
 from helper import get_biggest_contour
@@ -16,9 +18,19 @@ b_lower_white = np.array([00, 10, 170], dtype="uint8")
 b_upper_white = np.array([180, 100, 255], dtype="uint8")
 
 
-
-
 def narrow_down_roi_for_ball(ball, tleft, tright):
+    """This Function tries to narrow down the roi for tracking the ball
+        depending on the known position and direction of the ball.
+
+    Args:
+        ball: Ball Class containing all important information of the ball.
+        tleft: Most left point of the roi.
+        tright: Most right point of the roi.
+
+    Returns:
+        Returns new roi coordinates.
+
+    """
     border_left = ball.table.border_left
     border_right = ball.table.border_right
     border_center = ball.table.border_center
@@ -64,8 +76,21 @@ def narrow_down_roi_for_ball(ball, tleft, tright):
     return {"x": x, "y": y, "w": w, "h": h}
 
 
-
 def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright):
+    """This function tries the find the ball in the current frame.
+
+    Args:
+        ball: Ball Class containing all important information of the ball.
+        current_frame: The current frame to find the ball in.
+        roi_coordinates: current roi.
+        fgbg: OpenCV forground background subtraction to filter out moving objects.
+        tleft: Most left point for the roi.
+        tright: Most right point for the roi.
+
+    Returns:
+        Image or Frame with a box drawn around the ball. If ball is not found an empty array is returned.
+
+    """
     border_left = ball.table.border_left
     border_right = ball.table.border_right
     border_center = ball.table.border_center
@@ -73,21 +98,22 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     #add current frame for background subtraction
     background_gmask = fgbg.apply(current_frame.copy())
 
-
-    test = False
+    found_contours = False
     # narrow background to the roi and dilate the result
     coordinates = narrow_down_roi_for_ball(ball, tleft, tright)
-    temp = [1]
+
     if len(coordinates) != 0 and coordinates["x"] + coordinates["w"] < tright and coordinates["x"] > tleft:
         #we know the position and direction of the ball so we can update te roi
         roi_coordinates = coordinates
-        temp = [roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"]]
-        test = True
+        check_negative_val = [roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"]]
+        found_contours = True
 
-    if len(ball.box) != 0 and len(ball.lastBox) != 0 and not ball.position_change() or min(temp) < 0:
-        ball.updated_position(ball.box)
-        return []
+        if len(ball.box) != 0 and len(ball.lastBox) != 0 and not ball.position_change() or min(check_negative_val) < 0:
+            ball.updated_position(ball.box)
+            return []
 
+    #cv2.imshow("b", background_gmask)
+    #cv2.waitKey(0)
     roi_current_frame, coordinates = get_roi(roi_coordinates["x"], roi_coordinates["y"], roi_coordinates["w"], roi_coordinates["h"], background_gmask.copy(), 1)
     roi_current_frame = cv2.erode(roi_current_frame, np.ones((3, 3), np.uint8))
     d_background_gmask = cv2.dilate(roi_current_frame, np.ones((7, 7), np.uint8))
@@ -101,17 +127,14 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     white_mask = cv2.dilate(white_mask, np.ones((15, 15), np.uint8))
     #white_mask = cv2.erode(white_mask, np.ones((5, 5), np.uint8))
 
-    #cv2.imshow("temp", fg)
     #cv2.imshow("w", white_mask)
     #cv2.waitKey(0)
-
 
     (_, contours, _) = cv2.findContours(white_mask.copy(), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
     if len(contours) == 0:
         ball.updated_position(ball.box)
         return []
     max_contour = max(contours, key=cv2.contourArea)
-
 
     x1, y1, w1, h1 = cv2.boundingRect(max_contour)
     box = cv2.minAreaRect(max_contour)
@@ -120,8 +143,7 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     box = np.array(box, dtype="int")
     ball.updated_position(box)
 
-
-    if test:
+    if found_contours:
         for c in contours:
             if cv2.contourArea(c) < 100:
                 continue
@@ -152,75 +174,103 @@ def get_ball_position(ball, current_frame, roi_coordinates, fgbg, tleft, tright)
     return result
 
 
+def main(file, blue_table, table_straight, print_output, create_video, do_prediction):
+    """The main function of the application.
 
+    Args:
+        file: File to read the video from.
+        blue_table: Flag if table is blue.
+        table_straight: Flag if table is straight.
+        print_output: Flag if result should be shown.
+        create_video: Flag if should be created into a video.
+        do_prediction:  Flag if prediction parable should be drawn.
 
-def main(file, video, blue_table, pos_straight):
+    Returns:
+        None.
+
+    """
     ball = b.Ball()
-    table = t.Table()
+    ball.table = t.Table()
 
-    if video:
-        camera = cv2.VideoCapture(file)
+    if not os.path.isfile(file):
+        print("ERROR: Could not find file %s" % file)
+        return
+    camera = cv2.VideoCapture(file)
+    (grabbed, first_frame) = camera.read()
+    height, width = first_frame.shape[:2]
 
+    if create_video:
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter('output.avi',fourcc, 20.0, (1920,1080))
+        out = cv2.VideoWriter(file+'_out.aiv',fourcc, 20.0, (width,height))
 
-        (grabbed, first_frame) = camera.read()
-        print_frame( first_frame, "input_first_frame")
+    print_frame( first_frame, "input_first_frame")
 
-        tleft, ttop, tright, tbottom = table.get_table(first_frame, blue_table, pos_straight)
-        table.define_borders(tleft, ttop, tright, tbottom)
-        ball.table = table
+    tleft, ttop, tright, tbottom = ball.table.get_table(first_frame, blue_table, table_straight)
 
-        x = tleft[0]
-        y = 0
-        w = tright[0]-tleft[0]
-        h = tbottom[1]
-        roi_first_frame, coordinates = get_roi(x, y, w, h, first_frame.copy(), 1)
-        #print_frame(roi_first_frame, "roi_first_frame", True)
+    last_frame = first_frame.copy()
 
-        last_frame = first_frame.copy()
+    fgbg = cv2.createBackgroundSubtractorMOG2(history=10, varThreshold=70, detectShadows=False)
+    fgbg.apply(last_frame)
 
-        fgbg = cv2.createBackgroundSubtractorMOG2(history=10, varThreshold=70, detectShadows=False)
-        fgbg.apply(last_frame)
+    result = draw_border(tleft, ttop, tright, tbottom, last_frame.copy(), (0, 255, 0))
+    print_frame(result, "currentFrame", print_output)
+    if create_video:
+        out.write(result)
 
-        result = draw_border(tleft, ttop, tright, tbottom, last_frame.copy(), (0, 255, 0))
-        #cv2.imshow("run", result)
-        #cv2.waitKey(0)
+    while camera.isOpened():
+        (grabbed, current_frame) = camera.read()
+        if not grabbed:
+            break
 
-        while camera.isOpened():
-            (grabbed, current_frame) = camera.read()
-            if not grabbed:
-                break
+        result = get_ball_position(ball, current_frame.copy(),
+                                   {"x": tbottom[0], "y": 0, "w": ttop[0] - tbottom[0], "h": tbottom[1]}, fgbg, tleft[0], tright[0])
+        if len(result) == 0:
+            result = current_frame.copy()
 
-            result = get_ball_position(ball, current_frame.copy(),
-                                       {"x": tbottom[0], "y": y, "w": ttop[0] - tbottom[0], "h": h}, fgbg, tleft[0], tright[0])
-            if len(result) == 0:
-                result = current_frame.copy()
-
-            result = draw_border(tleft, ttop, tright, tbottom, result.copy(), (0, 255, 0))
-            if len(result) == 0:
-                continue
-
+        result = draw_border(tleft, ttop, tright, tbottom, result.copy(), (0, 255, 0))
+        if len(result) == 0:
             ball.draw_arrow(result)
             ball.draw_parable(result)
+            continue
 
+        ball.draw_arrow(result)
+        if do_prediction:
+            ball.draw_parable(result)
+
+        if create_video:
             out.write(result)
-            height, width = result.shape[:2]
-            result = cv2.resize(result, (int(width / 2), int(height / 2)))
-            cv2.imshow("run", result)
-            cv2.waitKey(1)
 
-            last_frame = current_frame.copy()
+        print_frame(result, "currentFrame", print_output)
 
-    else:
-        frame = cv2.imread(file)
-        print_frame(frame, "input_image")
-
+        last_frame = result.copy()
     pass
 
 
 if __name__ == "__main__":
-    #main("ggg.mp4", True, False, True)
-    main("gtt4.mp4", True, False, False)
+    parser = argparse.ArgumentParser(description='Motion Prediction of a Ping Pong Ball')
+
+    parser.add_argument('-f', action="store", dest="videoFile", default="", type=str,
+                        help="Path to the input video")#, required=True)
+    parser.add_argument('-bt', action="store", dest="blueTable", default=True, type=bool,
+                        help="If True table is assumed to be blue. Other colors aren't implemented yet")
+    parser.add_argument('-ts', action="store", dest="tableStraight", default=False, type=bool,
+                        help="If True table is assumed to stand horizontal in the Video")
+    parser.add_argument('-dr', action="store", dest="doShow", default=False, type=bool,
+                        help="If True shows results while processing")
+    parser.add_argument('-no', action="store", dest="createOutput", default=False, type=bool,
+                        help="If True output video is created")
+    parser.add_argument('-np', action="store", dest="prediction", default=True, type=bool,
+                        help="If True prediction path parable are drawn in the output")
+
+    arg = parser.parse_args()
+
+
+    main(arg.videoFile, arg.blueTable, arg.tableStraight, arg.doShow, arg.createOutput, arg.prediction)
+    # main("ggg.mp4", True, False, True, False, True)
+    main("gtt4.mp4", True, False, True, False, True)
+    #main("tt1.mp4", False, False, True, False, True)
+    #main("ggt1.mp4", True, False, True, False, True)
+    #main("ggt.mp4", True, False, True, False, True )
+
     pass
 
