@@ -252,15 +252,15 @@ if __name__ == "__main__":
     parser.add_argument('-f', action="store", dest="videoFile", default="", type=str,
                         help="Path to the input video")#, required=True)
     parser.add_argument('-bt', action="store", dest="blueTable", default=True, type=bool,
-                        help="If True table is assumed to be blue. Other colors aren't implemented yet")
+                        help="If True table is assumed to be blue. Other colors aren't implemented yet (default True)")
     parser.add_argument('-ts', action="store", dest="tableStraight", default=False, type=bool,
-                        help="If True table is assumed to stand horizontal in the Video")
-    parser.add_argument('-dr', action="store", dest="doShow", default=False, type=bool,
-                        help="If True shows results while processing")
-    parser.add_argument('-no', action="store", dest="createOutput", default=False, type=bool,
-                        help="If True output video is created")
-    parser.add_argument('-np', action="store", dest="prediction", default=True, type=bool,
-                        help="If True prediction path parable are drawn in the output")
+                        help="If True table is assumed to stand horizontal in the Video (default False)")
+    parser.add_argument('-s', action="store", dest="doShow", default=True, type=bool,
+                        help="If True shows results while processing (default True)")
+    parser.add_argument('-o', action="store", dest="createOutput", default=False, type=bool,
+                        help="If True output video is created (default False)")
+    parser.add_argument('-p', action="store", dest="prediction", default=True, type=bool,
+                        help="If True prediction path parable are drawn in the output (default True)")
 
     arg = parser.parse_args()
 
