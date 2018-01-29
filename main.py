@@ -200,8 +200,8 @@ def main(file, blue_table, table_straight, print_output, create_video, do_predic
     height, width = first_frame.shape[:2]
 
     if create_video:
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        out = cv2.VideoWriter(file+'_out.aiv',fourcc, 20.0, (width,height))
+        fourcc = cv2.VideoWriter_fourcc(*'DIVX')
+        out = cv2.VideoWriter((file+'_out.avi'),fourcc, 20.0, (width, height))
 
     print_frame( first_frame, "input_first_frame")
 
@@ -243,6 +243,9 @@ def main(file, blue_table, table_straight, print_output, create_video, do_predic
         print_frame(result, "currentFrame", print_output)
 
         last_frame = result.copy()
+    camera.release()
+    if create_video:
+        out.release()
     pass
 
 
@@ -251,23 +254,22 @@ if __name__ == "__main__":
 
     parser.add_argument('-f', action="store", dest="videoFile", default="", type=str,
                         help="Path to the input video")#, required=True)
-    parser.add_argument('-bt', action="store", dest="blueTable", default=True, type=bool,
-                        help="If True table is assumed to be blue. Other colors aren't implemented yet (default True)")
-    parser.add_argument('-ts', action="store", dest="tableStraight", default=False, type=bool,
-                        help="If True table is assumed to stand horizontal in the Video (default False)")
-    parser.add_argument('-s', action="store", dest="doShow", default=True, type=bool,
-                        help="If True shows results while processing (default True)")
-    parser.add_argument('-o', action="store", dest="createOutput", default=False, type=bool,
-                        help="If True output video is created (default False)")
-    parser.add_argument('-p', action="store", dest="prediction", default=True, type=bool,
-                        help="If True prediction path parable are drawn in the output (default True)")
+    parser.add_argument('-gt', action="store_true", dest="greenTable",
+                        help="If Flag is set table is assumed to be green. Default is blue (default False)")
+    parser.add_argument('-ts', action="store_true", dest="tableStraight",
+                        help="If Flag is set table is assumed to stand horizontal in the Video (default False)")
+    parser.add_argument('-ns', action="store_true", dest="doNotShow",
+                        help="If Flag is set results is NOT show while processing (default False)")
+    parser.add_argument('-o', action="store_true", dest="createOutput",
+                        help="If Flag is set output video is created (default False)")
+    parser.add_argument('-np', action="store_true", dest="noPrediction",
+                        help="If Flag is set prediction path parable are NOT drawn in the output (default False)")
 
     arg = parser.parse_args()
 
-
-    main(arg.videoFile, arg.blueTable, arg.tableStraight, arg.doShow, arg.createOutput, arg.prediction)
+    main(arg.videoFile, not arg.greenTable, arg.tableStraight, not arg.doNotShow, arg.createOutput, not arg.noPrediction)
     # main("ggg.mp4", True, False, True, False, True)
-    main("gtt4.mp4", True, False, True, False, True)
+    #main("gtt4.mp4", True, False, True, False, True)
     #main("tt1.mp4", False, False, True, False, True)
     #main("ggt1.mp4", True, False, True, False, True)
     #main("ggt.mp4", True, False, True, False, True )
